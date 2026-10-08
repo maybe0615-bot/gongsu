@@ -232,10 +232,16 @@ h3{font-size:17px;color:var(--ink)}
 @media(max-width:380px){.day{min-height:56px;padding:4px 2px}.day .n{font-size:13px}.day .t{font-size:10px}}
 @media(min-width:700px){.day{min-height:84px;padding:7px 5px;gap:4px}.day .n{font-size:16px}.day .t{font-size:12px}.day .v{font-size:14px}}
 @media(min-width:1000px){.day{min-height:96px}}
+.bkwarn{order:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff4e5;color:#7a4510;border:1px solid #f0c48a;border-radius:16px;padding:12px 14px;font-size:13px;line-height:1.5}
+.bkwarn span{flex:1;min-width:150px}
+.bkwarn .btn{flex:0 0 auto;padding:10px 14px;font-size:13px}
+#bkShare{grid-column:1/-1}
+@media(min-width:700px){.wrap>.bkwarn{grid-column:1/-1}}
 </style>
 
 <div class="wrap">
   <div class="top"><h1>공수 장부</h1><span id="sync">불러오는 중…</span></div>
+  <div class="bkwarn" id="bkWarn" hidden><span id="bkWarnTxt"></span><button class="btn" id="bkWarnBtn">지금 백업 보내기</button></div>
   <div class="month">
     <button class="nav" id="prev" aria-label="이전 달">‹</button>
     <h2 id="ym"></h2>
@@ -268,11 +274,12 @@ h3{font-size:17px;color:var(--ink)}
   <section class="sec">
     <h3>백업</h3>
     <div class="act" style="flex-wrap:wrap">
+      <button class="btn" id="bkShare">백업 보내기 (카톡·드라이브)</button>
       <button class="btn plain" id="bkJson" style="flex:1">백업 파일 저장</button>
       <button class="btn plain" id="bkCsv" style="flex:1">엑셀용 표 저장</button>
       <button class="btn plain" id="bkLoad" style="flex:1">백업 불러오기</button>
     </div>
-    <input type="file" id="bkFile" accept=".json,application/json" hidden>
+    <input type="file" id="bkFile" accept=".json,.txt,application/json,text/plain" hidden>
     <p class="note" id="bkMsg">기록은 이 폰 안에만 있어. 폰을 바꾸거나 잃어버리면 사라지니까, 한 달에 한 번은 백업 파일을 저장해서 구글 드라이브에 넣어둬.</p>
     <textarea id="bkText" hidden readonly aria-label="백업 내용" style="width:100%;min-height:120px;font-size:12px"></textarea>
   </section>
@@ -334,7 +341,7 @@ var groupBy='client', selDate=null, editId=null, fG=1, delArmed=false, rateTouch
 /* ---------- 저장소 ---------- */
 function loadLocal(){try{entries=JSON.parse(localStorage.getItem('gongsu')||'[]')}catch(e){entries=[]}}
 function saveLocal(){try{localStorage.setItem('gongsu',JSON.stringify(entries))}catch(e){}}
-function useLocal(){local=true;loaded=true;loadLocal();try{clients=JSON.parse(localStorage.getItem('gongsu_clients')||'[]')}catch(e){clients=[]}$('sync').textContent='이 폰에 저장됨';render()}
+function useLocal(){local=true;loaded=true;loadLocal();try{clients=JSON.parse(localStorage.getItem('gongsu_clients')||'[]')}catch(e){clients=[]}$('sync').textContent='이 폰에 저장됨';render();setTimeout(checkBk,0)}
 function start(){
   var c=window.claude;
   if(!c||!c.use){useLocal();return}
@@ -532,7 +539,7 @@ function saveFile(name,data){
       function(e){if(e&&e.code==='declined')bkSay('저장을 취소했어.');else if(e&&e.code==='rate_limited')bkSay('잠시 뒤 다시 눌러줘.');else fb()});
   }).catch(fb);
 }
-$('bkJson').onclick=function(){saveFile('공수장부-백업-'+todayStr+'.json',JSON.stringify({app:'gongsu',saved:todayStr,clients:clients.map(function(c){return{name:c.name,rate:c.rate||0,color:c.color}}),entries:allSorted().map(clean)},null,1))};
+$('bkJson').onclick=function(){markBk();saveFile('공수장부-백업-'+todayStr+'.json',JSON.stringify({app:'gongsu',saved:todayStr,clients:clients.map(function(c){return{name:c.name,rate:c.rate||0,color:c.color}}),entries:allSorted().map(clean)},null,1))};
 $('bkCsv').onclick=function(){
   var q=function(s){return '"'+String(s).replace(/"/g,'""')+'"'};
   var rows=[['날짜','거래처','현장','공수','단가','금액','메모'].join(',')];
@@ -562,6 +569,28 @@ $('bkFile').onchange=function(){
   };
   rd.readAsText(f);
 };
+
+/* ---------- 백업 알림·보내기 ---------- */
+function lastBk(){try{return localStorage.getItem('gongsu_lastbk')||''}catch(e){return ''}}
+function markBk(){try{localStorage.setItem('gongsu_lastbk',todayStr)}catch(e){}checkBk()}
+function checkBk(){
+  if(!loaded||!entries.length){$('bkWarn').hidden=true;return}
+  var l=lastBk(),days=l?Math.floor((new Date(todayStr)-new Date(l))/864e5):-1;
+  if(l&&days<30){$('bkWarn').hidden=true;return}
+  $('bkWarnTxt').textContent=l?'마지막 백업이 '+days+'일 전이야. 기록은 이 폰에만 있으니 백업을 보내둬.':'아직 백업한 적이 없어. 기록은 이 폰에만 있으니 한 번 보내둬.';
+  $('bkWarn').hidden=false;
+}
+function bkData(){return JSON.stringify({app:'gongsu',saved:todayStr,clients:clients.map(function(c){return{name:c.name,rate:c.rate||0,color:c.color}}),entries:allSorted().map(clean)},null,1)}
+function shareBk(){
+  if(!loaded||!entries.length){bkSay('보낼 기록이 아직 없어.');return}
+  var name='공수장부-백업-'+todayStr+'.txt',f;
+  try{f=new File([bkData()],name,{type:'text/plain'})}catch(e){}
+  if(f&&navigator.canShare&&navigator.canShare({files:[f]})){
+    navigator.share({files:[f],title:'공수 장부 백업'}).then(function(){markBk();bkSay('백업을 보냈어 ('+entries.length+'건). 받은 곳에서 파일이 잘 왔는지 한 번 확인해줘.')},function(e){if(!e||e.name!=='AbortError')bkSay('보내기가 안 됐어. 대신 "백업 파일 저장"을 눌러줘.')});
+  }else{saveFile('공수장부-백업-'+todayStr+'.json',bkData());markBk()}
+}
+$('bkShare').onclick=shareBk;$('bkWarnBtn').onclick=shareBk;
+setInterval(checkBk,60000);
 
 /* ---------- 이벤트 ---------- */
 function shift(n){M+=n;if(M<0){M=11;Y--}if(M>11){M=0;Y++}render()}

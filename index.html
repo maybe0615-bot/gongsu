@@ -3,6 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>공수 장부</title>
 <meta name="theme-color" content="#2855e8">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 </head><body>
@@ -241,6 +242,11 @@ h3{font-size:17px;color:var(--ink)}
 #kCnt{font-size:13px;font-weight:500;color:var(--sub)}
 #kArr{font-size:13px;color:var(--sub)}
 #kBody{display:flex;flex-direction:column;gap:12px}
+.stcal{background:var(--card);padding:4px 0 16px;display:flex;flex-direction:column;gap:6px}
+.stcal .who{margin:0 0 8px}
+.stcal .day{min-height:54px}
+.stcal .day .t.m{-webkit-line-clamp:2}
+#stAct{flex-wrap:wrap}
 </style>
 
 <div class="wrap">
@@ -287,7 +293,7 @@ h3{font-size:17px;color:var(--ink)}
     </div>
     <input type="file" id="bkFile"  hidden>
     <p class="note" id="bkMsg">기록은 이 폰 안에만 있어. 폰을 바꾸거나 잃어버리면 사라지니까, 한 달에 한 번은 백업 파일을 저장해서 구글 드라이브에 넣어둬.</p>
-    <p class="note">앱 버전 v7</p>
+    <p class="note">앱 버전 v8</p>
     <textarea id="bkText" hidden readonly aria-label="백업 내용" style="width:100%;min-height:120px;font-size:12px"></textarea>
   </section>
 </div>
@@ -296,7 +302,8 @@ h3{font-size:17px;color:var(--ink)}
   <div id="stBody"></div>
   <div class="act" id="stAct">
     <button class="btn plain" id="stClose">닫기</button>
-    <button class="btn" id="stCopy">문자용으로 복사</button>
+    <button class="btn plain" id="stCopy">내역 글로 복사</button>
+    <button class="btn" id="stImg">달력 이미지 저장</button>
   </div>
   <textarea id="stText" hidden readonly aria-label="문자용 내역"></textarea>
 </div></div>
@@ -477,24 +484,46 @@ function openStmt(k){
   var key=groupBy;
   var l=monthList().filter(function(e){return (e[key]||'(미입력)')===k}).sort(function(a,b){return a.date<b.date?-1:1});
   var t=total(l), tax=Math.round(t.w*TAX), other=key==='client'?'site':'client';
-  var title=Y+'년 '+(M+1)+'월 공수 내역';
+  var title=Y+'년 '+(M+1)+'월 공수 내역', kc=key==='client'?cOf(k):null;
   var lines=['['+title+'] '+k];
-  var h='<h2 id="stTitle">'+title+'</h2><p class="who">'+(key==='client'?'거래처':'현장')+': '+esc(k)+'</p>'+
-    '<table class="st"><thead><tr><th>날짜</th><th>'+(key==='client'?'현장':'거래처')+'</th><th class="num">공수</th><th class="num">금액</th></tr></thead><tbody>';
+  /* 업체 전용 달력 */
+  var by={},tx={};l.forEach(function(e){by[e.date]=(by[e.date]||0)+(e.g||0);tx[e.date]=(tx[e.date]||'')+(e.site?'<span class="t">'+esc(e.site)+'</span>':'')+(e.memo?'<span class="t m">'+esc(e.memo)+'</span>':'')});
+  var first=new Date(Y,M,1).getDay(),days=new Date(Y,M+1,0).getDate(),c='';
+  for(var i=0;i<first;i++)c+='<div class="day blank"></div>';
+  for(var d=1;d<=days;d++){var ds=ymd(Y,M,d),g=by[ds]||0,cls='day'+((first+d-1)%7===0?' sun':'')+(g?' on':'');
+    c+='<div class="'+cls+'"><span class="n">'+d+'</span>'+(g?(kc?'<span class="v c" style="background:'+esc(kc.color)+'">':'<span class="v">')+g+'</span>':'')+(tx[ds]||'')+'</div>'}
+  var h='<div id="stCalWrap" class="stcal"><h2 id="stTitle">'+Y+'년 '+(M+1)+'월</h2><p class="who">'+esc(k)+' · '+t.g+'공수</p>'+
+    '<div class="dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div><div class="cal">'+c+'</div></div>'+
+    '<table class="st"><thead><tr><th>날짜</th><th>'+(key==='client'?'현장':'거래처')+'</th><th class="num">공수</th></tr></thead><tbody>';
   l.forEach(function(e){
-    var dt=new Date(e.date+'T00:00:00'), d=(dt.getMonth()+1)+'/'+dt.getDate()+'('+DOW[dt.getDay()]+')';
-    h+='<tr><td>'+d+'</td><td>'+esc(e[other]||'')+(e.memo?'<br><small>'+esc(e.memo)+'</small>':'')+'</td><td class="num">'+e.g+'</td><td class="num">'+(rOf(e)?won(amt(e)):'—')+'</td></tr>';
-    lines.push(d+' '+(e[other]?e[other]+' ':'')+e.g+'공수'+(rOf(e)?' '+won(amt(e))+'원':''));
+    var dt=new Date(e.date+'T00:00:00'), dd=(dt.getMonth()+1)+'/'+dt.getDate()+'('+DOW[dt.getDay()]+')';
+    h+='<tr><td>'+dd+'</td><td>'+esc(e[other]||'')+(e.memo?'<br><small>'+esc(e.memo)+'</small>':'')+'</td><td class="num">'+e.g+'</td></tr>';
+    lines.push(dd+' '+(e[other]?e[other]+' ':'')+e.g+'공수'+(e.memo?' ('+e.memo+')':''));
   });
-  h+='</tbody><tfoot><tr><td colspan="2">합계</td><td class="num">'+t.g+'</td><td class="num">'+won(t.w)+'원</td></tr>'+
-    '<tr class="sub"><td colspan="3">3.3% 공제</td><td class="num">−'+won(tax)+'원</td></tr>'+
-    '<tr class="net"><td colspan="3">입금 받을 금액</td><td class="num">'+won(t.w-tax)+'원</td></tr></tfoot></table>';
-  lines.push('합계 '+t.g+'공수 '+won(t.w)+'원','3.3% 공제 -'+won(tax)+'원','입금 받을 금액 '+won(t.w-tax)+'원');
-  stPlain=lines.join('\n');
-  $('stBody').innerHTML=h;$('stText').hidden=true;$('stCopy').textContent='문자용으로 복사';
+  h+='</tbody><tfoot><tr><td colspan="2">합계 '+t.g+'공수</td><td class="num">'+won(t.w)+'원</td></tr>'+
+    '<tr class="sub"><td colspan="2">3.3% 공제</td><td class="num">−'+won(tax)+'원</td></tr>'+
+    '<tr class="net"><td colspan="2">입금 받을 금액</td><td class="num">'+won(t.w-tax)+'원</td></tr></tfoot></table>';
+  lines.push('','합계 '+t.g+'공수 '+won(t.w)+'원','3.3% 공제 -'+won(tax)+'원','입금 받을 금액 '+won(t.w-tax)+'원');
+  stPlain=lines.join('\n');stName=k;
+  $('stBody').innerHTML=h;$('stText').hidden=true;$('stCopy').textContent='내역 글로 복사';$('stImg').textContent='달력 이미지 저장';
   $('stmt').hidden=false;$('stmt').scrollTop=0;
 }
+var stName='';
+function stImage(){
+  var btn=$('stImg'),el=$('stCalWrap');if(!el)return;
+  if(!window.html2canvas){btn.textContent='잠시 뒤 다시 눌러줘';return}
+  btn.textContent='만드는 중…';
+  html2canvas(el,{backgroundColor:getComputedStyle(el).backgroundColor||'#ffffff',scale:2}).then(function(cv){
+    cv.toBlob(function(b){
+      var name=Y+'-'+pad(M+1)+'_'+stName+'_공수달력.png',f;
+      try{f=new File([b],name,{type:'image/png'})}catch(e){}
+      if(f&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).then(function(){btn.textContent='보냈어'},function(){btn.textContent='달력 이미지 저장'})}
+      else{var u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},5000);btn.textContent='저장했어 (다운로드 폴더)'}
+    },'image/png');
+  },function(){btn.textContent='이미지 만들기 실패 · 화면 캡쳐로 보내줘'});
+}
 $('brk').onclick=function(ev){var b=ev.target.closest('[data-k]');if(b)openStmt(b.dataset.k)};
+$('stImg').onclick=stImage;
 $('stClose').onclick=function(){$('stmt').hidden=true};
 $('stCopy').onclick=function(){
   var btn=this, fb=function(){var ta=$('stText');ta.value=stPlain;ta.hidden=false;ta.focus();ta.select();btn.textContent='아래 글을 길게 눌러 복사'};

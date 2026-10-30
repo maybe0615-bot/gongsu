@@ -564,6 +564,16 @@ $('bkFile').onchange=function(){
     var list,kl=[];
     try{var o=JSON.parse(rd.result);list=Array.isArray(o)?o:o.entries;kl=Array.isArray(o.clients)?o.clients:[]}catch(e){}
     if(!Array.isArray(list)){bkSay('이 파일은 공수 장부 백업 파일이 아니야.');return}
+    if(o&&o.replace&&o.replace.keepFrom){
+      if(!local){bkSay('이 복원 파일은 폰 앱에서만 쓸 수 있어.');return}
+      var kf=o.replace.keepFrom,kt=o.replace.keepTo||'9999-12-31',keep=entries.filter(function(e){return e.date>=kf&&e.date<=kt});
+      if(!confirm(kf+' 이전 기록을 이 파일 내용으로 전부 바꿀까? '+kf+' 이후 기록 '+keep.length+'건은 그대로 둬.'))return;
+      var seen={},add=list.filter(function(e){return e&&/^\d{4}-\d{2}-\d{2}$/.test(e.date)&&typeof e.g==='number'&&!(e.date>=kf&&e.date<=kt)}).map(clean).filter(function(e){var s=sig(e);if(seen[s])return false;seen[s]=1;return true});
+      entries=keep.concat(add.map(function(e){return Object.assign({id:newId('l')},e)}));
+      kl.forEach(function(c){if(c&&typeof c.name==='string'&&c.name&&!cOf(c.name))clients.push({id:newId('k'),name:c.name,rate:+c.rate||0,color:PAL.indexOf(c.color)>=0?c.color:PAL[0]})});
+      saveLocal();kStore();render();
+      bkSay(add.length+'건으로 바꿨어. '+kf+' 이후 '+keep.length+'건은 그대로야.');return;
+    }
     var have={},days={};entries.forEach(function(e){have[sig(e)]=1;days[e.date]=1});
     var add=list.filter(function(e){return e&&/^\d{4}-\d{2}-\d{2}$/.test(e.date)&&typeof e.g==='number'}).map(clean).filter(function(e){var s=sig(e);if(have[s]||days[e.date])return false;have[s]=1;return true});
     var kadd=kl.filter(function(c){return c&&typeof c.name==='string'&&c.name&&!cOf(c.name)}).map(function(c){return{name:c.name,rate:+c.rate||0,color:PAL.indexOf(c.color)>=0?c.color:PAL[0]}});

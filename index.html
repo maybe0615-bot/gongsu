@@ -237,6 +237,10 @@ h3{font-size:17px;color:var(--ink)}
 .bkwarn .btn{flex:0 0 auto;padding:10px 14px;font-size:13px}
 #bkShare{grid-column:1/-1}
 @media(min-width:700px){.wrap>.bkwarn{grid-column:1/-1}}
+.ktog{border:0;background:none;padding:6px 0;font-size:17px;font-weight:700;color:var(--ink);letter-spacing:-.025em;display:flex;align-items:center;gap:6px}
+#kCnt{font-size:13px;font-weight:500;color:var(--sub)}
+#kArr{font-size:13px;color:var(--sub)}
+#kBody{display:flex;flex-direction:column;gap:12px}
 </style>
 
 <div class="wrap">
@@ -250,15 +254,17 @@ h3{font-size:17px;color:var(--ink)}
   </div>
   <section class="sum" id="sum"></section>
   <div class="sec">
-    <div class="chips" id="flt"></div>
+    <div class="chips" id="flt" hidden></div>
     <div class="dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
     <div class="cal" id="cal"></div>
     <p class="note">날짜를 누르면 공수를 적을 수 있어.</p>
   </div>
   <section class="sec">
-    <div class="sech"><h3>거래처</h3><button class="nav txt" id="kAdd">추가</button></div>
+    <div class="sech"><button class="ktog" id="kTog" aria-expanded="false" aria-controls="kBody">거래처 <span id="kCnt"></span> <span id="kArr">▸</span></button><button class="nav txt" id="kAdd">추가</button></div>
+    <div id="kBody" hidden>
     <div class="tbl" id="kl"></div>
     <p class="note">거래처를 등록해두면 달력에 색으로 구분되고, 공수 적을 때 단가가 자동으로 들어가.</p>
+    </div>
   </section>
   <section class="sec">
     <div class="sech"><h3>이번 달 거래처별 합계</h3>
@@ -279,8 +285,9 @@ h3{font-size:17px;color:var(--ink)}
       <button class="btn plain" id="bkCsv" style="flex:1">엑셀용 표 저장</button>
       <button class="btn plain" id="bkLoad" style="flex:1">백업 불러오기</button>
     </div>
-    <input type="file" id="bkFile" accept=".json,.txt,application/json,text/plain" hidden>
+    <input type="file" id="bkFile"  hidden>
     <p class="note" id="bkMsg">기록은 이 폰 안에만 있어. 폰을 바꾸거나 잃어버리면 사라지니까, 한 달에 한 번은 백업 파일을 저장해서 구글 드라이브에 넣어둬.</p>
+    <p class="note">앱 버전 v7</p>
     <textarea id="bkText" hidden readonly aria-label="백업 내용" style="width:100%;min-height:120px;font-size:12px"></textarea>
   </section>
 </div>
@@ -394,7 +401,7 @@ function render(){
     '<div class="rows"><div><span>3.3% 떼는 돈</span><b>−'+won(tax)+'원</b></div>'+
     '<div><span>실제 받는 돈</span><b>'+won(t.w-tax)+'원</b></div></div>';
 
-  if(calF&&!cOf(calF))calF='';
+  calF='';$('kCnt').textContent=clients.length?clients.length+'곳':'';
   $('flt').innerHTML=clients.length?'<button class="chip" data-f="" aria-pressed="'+(!calF)+'">전체</button>'+clients.map(function(c){return '<button class="chip" data-f="'+esc(c.name)+'" aria-pressed="'+(calF===c.name)+'"><span class="dot" style="background:'+esc(c.color)+'"></span>'+esc(c.name)+'</button>'}).join(''):'';
   $('kl').innerHTML=clients.length?clients.map(function(c){return '<button class="r" data-c="'+esc(c.id)+'"><span class="nm"><span class="dot" style="background:'+esc(c.color)+'"></span>'+esc(c.name)+'</span><span class="gg"></span><span class="ww">'+(c.rate?won(c.rate)+'원':'단가 없음')+'</span></button>'}).join(''):'<div class="empty">등록한 거래처가 아직 없어. 추가를 눌러 넣어봐.</div>';
   var byDay={},txt={},dc={};(calF?ml.filter(function(e){return e.client===calF}):ml).forEach(function(e){var kc=cOf(e.client);if(kc&&!dc[e.date])dc[e.date]=kc.color;byDay[e.date]=(byDay[e.date]||0)+(e.g||0);
@@ -509,6 +516,7 @@ function openK(c){
 function kErr(m){$('kErr').textContent=m;$('kErr').hidden=false}
 function kStore(){try{localStorage.setItem('gongsu_clients',JSON.stringify(clients))}catch(e){}}
 $('kAdd').onclick=function(){openK(null)};
+$('kTog').onclick=function(){var o=$('kBody').hidden;$('kBody').hidden=!o;this.setAttribute('aria-expanded',o);$('kArr').textContent=o?'▾':'▸'};
 $('kl').onclick=function(ev){var b=ev.target.closest('[data-c]');if(b)openK(clients.filter(function(c){return c.id===b.dataset.c})[0])};
 $('kClose').onclick=closeSheet;
 $('kSw').onclick=function(ev){var b=ev.target.closest('[data-p]');if(b){kColor=b.dataset.p;kSwatch()}};

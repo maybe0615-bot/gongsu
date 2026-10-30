@@ -339,7 +339,16 @@ var todayStr=ymd(Y,M,now.getDate());
 var groupBy='client', selDate=null, editId=null, fG=1, delArmed=false, rateTouched=false;
 
 /* ---------- 저장소 ---------- */
-function loadLocal(){try{entries=JSON.parse(localStorage.getItem('gongsu')||'[]')}catch(e){entries=[]}}
+var idSeq=0;function newId(p){return p+Date.now().toString(36)+'-'+(idSeq++).toString(36)+Math.random().toString(36).slice(2,6)}
+function loadLocal(){try{entries=JSON.parse(localStorage.getItem('gongsu')||'[]')}catch(e){entries=[]}repairLocal()}
+function repairLocal(){
+  var seen={},dup=false;entries.forEach(function(e){if(seen[e.id])dup=true;seen[e.id]=1});
+  if(!dup)return;
+  var sigs={},out=[];
+  entries.forEach(function(e){var c=clean(e),k=[c.date,c.g,c.site,c.client,c.rate,c.memo].join('|');if(sigs[k])return;sigs[k]=1;out.push(Object.assign({},e,{id:newId('l')}))});
+  entries=out;saveLocal();
+  try{localStorage.setItem('gongsu_repaired',todayStr)}catch(e){}
+}
 function saveLocal(){try{localStorage.setItem('gongsu',JSON.stringify(entries))}catch(e){}}
 function useLocal(){local=true;loaded=true;loadLocal();try{clients=JSON.parse(localStorage.getItem('gongsu_clients')||'[]')}catch(e){clients=[]}$('sync').textContent='이 폰에 저장됨';render();setTimeout(checkBk,0)}
 function start(){
@@ -358,7 +367,7 @@ function start(){
 function putEntry(id,data){
   if(local){
     if(id){entries=entries.map(function(e){return e.id===id?Object.assign({id:id},data):e})}
-    else entries.push(Object.assign({id:'l'+Date.now()},data));
+    else entries.push(Object.assign({id:newId('l')},data));
     saveLocal();render();return Promise.resolve();
   }
   return id?col.doc(id).set(data):col.add(data);
@@ -510,7 +519,7 @@ $('kSave').onclick=function(){
   if(!name){kErr('거래처 이름을 적어줘.');return}
   if(!kId&&cOf(name)){kErr('같은 이름의 거래처가 이미 있어.');return}
   var btn=this,p;
-  if(local){if(kId)clients=clients.map(function(c){return c.id===kId?Object.assign({id:kId},d):c});else clients.push(Object.assign({id:'k'+Date.now()},d));kStore();render();p=Promise.resolve()}
+  if(local){if(kId)clients=clients.map(function(c){return c.id===kId?Object.assign({id:kId},d):c});else clients.push(Object.assign({id:newId('k')},d));kStore();render();p=Promise.resolve()}
   else if(!kcol){kErr('아직 불러오는 중이야. 잠깐만 기다려줘.');return}
   else p=kId?kcol.doc(kId).set(d):kcol.add(d);
   btn.disabled=true;p.then(function(){btn.disabled=false;closeSheet()},function(){btn.disabled=false;kErr('저장이 안 됐어. 잠시 뒤 다시 눌러줘.')});
@@ -555,15 +564,15 @@ $('bkFile').onchange=function(){
     var list,kl=[];
     try{var o=JSON.parse(rd.result);list=Array.isArray(o)?o:o.entries;kl=Array.isArray(o.clients)?o.clients:[]}catch(e){}
     if(!Array.isArray(list)){bkSay('이 파일은 공수 장부 백업 파일이 아니야.');return}
-    var have={};entries.forEach(function(e){have[sig(e)]=1});
-    var add=list.filter(function(e){return e&&/^\d{4}-\d{2}-\d{2}$/.test(e.date)&&typeof e.g==='number'}).map(clean).filter(function(e){var s=sig(e);if(have[s])return false;have[s]=1;return true});
+    var have={},days={};entries.forEach(function(e){have[sig(e)]=1;days[e.date]=1});
+    var add=list.filter(function(e){return e&&/^\d{4}-\d{2}-\d{2}$/.test(e.date)&&typeof e.g==='number'}).map(clean).filter(function(e){var s=sig(e);if(have[s]||days[e.date])return false;have[s]=1;return true});
     var kadd=kl.filter(function(c){return c&&typeof c.name==='string'&&c.name&&!cOf(c.name)}).map(function(c){return{name:c.name,rate:+c.rate||0,color:PAL.indexOf(c.color)>=0?c.color:PAL[0]}});
     kadd.forEach(function(d){if(local){clients.push(Object.assign({id:'k'+Date.now()+Math.random().toString(36).slice(2,6)},d))}else if(kcol)kcol.add(d)});
     if(local&&kadd.length){kStore();render()}
     if(!add.length){bkSay(kadd.length?'거래처 '+kadd.length+'곳을 불러왔어. 기록은 이미 다 들어 있어.':'새로 넣을 기록이 없어. 이미 다 들어 있어.');return}
     bkSay(add.length+'건 넣는 중…');
     var i=0,next=function(){
-      if(i>=add.length){bkSay(add.length+'건 불러왔어. 이미 있던 기록은 건너뛰었어.');return}
+      if(i>=add.length){bkSay(add.length+'건 불러왔어. 이 폰에 이미 기록이 있는 날짜는 건드리지 않았어.');return}
       putEntry(null,add[i++]).then(next,function(){bkSay((i-1)+'건까지 넣고 멈췄어. 잠시 뒤 다시 불러오면 나머지만 들어가.')});
     };next();
   };
